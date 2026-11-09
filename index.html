@@ -80,7 +80,7 @@ function todayStr(){return dateStr(new Date())}
 
 /* ============ SAVE ============ */
 const SK='blooplands_save_v1';
-const save={coins:0,own:['puff'],sel:'puff',stars:{},maxLevel:1,bestTower:0,bestRogue:0,daily:{date:'',best:0,streak:0,last:''},mute:false};
+const save={coins:0,own:['puff'],sel:'puff',stars:{},maxLevel:1,bestTower:0,bestRogue:0,daily:{date:'',best:0,streak:0,last:''},mute:false,ctrl:'one'};
 try{const s=JSON.parse(localStorage.getItem(SK)||'null');if(s)Object.assign(save,s)}catch(e){}
 function persist(){try{localStorage.setItem(SK,JSON.stringify(save))}catch(e){}}
 
@@ -131,7 +131,10 @@ function themeFor(r){const h=(HUES[r%10]+Math.floor(r/10)*22)%360;
 /* ============ STATE ============ */
 let G=null,P=null,tiles=[],enemies=[],bubbles=[],fruits=[],projs=[],parts=[],texts=[],pend=[],warp=null,wisp=null;
 const keys={left:0,right:0};
-let steer=null,steerDir=0,shakeT=0;
+let steer=null,steerDir=0,shakeT=0,joy=null,fireId=null,touchFire=false;
+const FIREC={x:278,y:520,r:38},JUMPC={x:212,y:538,r:27};
+function twoT(){return save.ctrl==='two'}
+function clearTouch(){steer=null;steerDir=0;joy=null;fireId=null;touchFire=false}
 
 /* ============ LEVEL GEN ============ */
 const PATS=["############","####....####","###......###","..########..","#####..#####","######......","......######","##..####..##","#..######..#","###.####.###","####.##.####","##########..","..##########","###..##..###","#...####...#","##.##..##.##"];
@@ -305,7 +308,8 @@ function updPlayer(dt){
  }
  if(!p.ride){for(const b of bubbles){if(b.state==='float'&&!b.dead&&b.pt<=0&&circRect(b.x,b.y,b.r,p))popEmpty(b,{n:0})}}
  // auto fire
- if(p.cd<=0&&G.phase!=='secret'&&G.phase!=='ready'){
+ if(p.cd<=0&&G.phase!=='secret'&&G.phase!=='ready'&&twoT()){if(touchFire||keys.fire)shoot(p.face)}
+ else if(p.cd<=0&&G.phase!=='secret'&&G.phase!=='ready'){
   let best=null,bd=1e9;
   for(const e of enemies){if(e.state!=='walk')continue;const dx=e.x+e.w/2-(p.x+p.w/2),dy=e.y+e.h/2-(p.y+p.h/2);
    if(Math.abs(dy)<T*1.25+(e.type==='boss'?20:0)&&Math.abs(dx)<4.7*T*G.st.range&&Math.abs(dx)<bd){bd=Math.abs(dx);best=dx}}
@@ -529,14 +533,29 @@ addEventListener('keyup',e=>{
  else if(k==='z'||k==='Z'||k==='x'||k==='X'||k==='Shift')keys.fire=0;
 });
 function cvPos(e){const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
+function inC(p,c,pad){return Math.hypot(p.x-c.x,p.y-c.y)<=c.r+(pad||0)}
 cv.addEventListener('pointerdown',e=>{
  initAudio();if(!G||G.paused)return;
  e.preventDefault();try{cv.setPointerCapture(e.pointerId)}catch(_){}
  const p=cvPos(e);
+ if(twoT()){
+  if(inC(p,JUMPC,10)){wantJump();return}
+  if(p.x>=W*.5){if(fireId===null){fireId=e.pointerId;touchFire=true}return}
+  if(!joy){joy={id:e.pointerId,bx:p.x,by:p.y,x:p.x,y:p.y,armed:true};steerDir=0}
+  return;
+ }
  if(!steer){steer={id:e.pointerId,ax:p.x,ay:p.y,sx:p.x,sy:p.y,t:performance.now()};steerDir=0}
  else wantJump();
 });
 cv.addEventListener('pointermove',e=>{
+ if(joy&&joy.id===e.pointerId){
+  const p=cvPos(e);let dx=p.x-joy.bx,dy=p.y-joy.by;
+  const m=Math.hypot(dx,dy);if(m>46){joy.bx=p.x-dx/m*46;joy.by=p.y-dy/m*46;dx=p.x-joy.bx;dy=p.y-joy.by}
+  joy.x=p.x;joy.y=p.y;
+  steerDir=dx>12?1:dx<-12?-1:0;
+  if(dy<-24){if(joy.armed){wantJump();joy.armed=false}}else if(dy>-10)joy.armed=true;
+  return;
+ }
  if(!steer||steer.id!==e.pointerId)return;
  const p=cvPos(e);let dx=p.x-steer.ax;
  if(dx>34){steer.ax=p.x-34;dx=34}else if(dx<-34){steer.ax=p.x+34;dx=-34}
@@ -546,8 +565,9 @@ cv.addEventListener('pointermove',e=>{
  if(Math.hypot(p.x-steer.sx,p.y-steer.sy)>14)steer.moved=true;
 });
 function endPtr(e){
+ if(joy&&joy.id===e.pointerId){joy=null;steerDir=0;return}
+ if(fireId===e.pointerId){fireId=null;touchFire=false;return}
  if(!steer||steer.id!==e.pointerId)return;
- const p=cvPos(e);
  if(!steer.moved&&!steer.flick&&performance.now()-steer.t<260)wantJump();
  steer=null;steerDir=0;
 }
@@ -558,7 +578,7 @@ pauseBtn.addEventListener('click',()=>{initAudio();togglePause()});
 function togglePause(){
  if(!G||!G.active||G.phase==='over'||G.phase==='finishing')return;
  if(G.paused){G.paused=false;ui.innerHTML=''}
- else{G.paused=true;steer=null;steerDir=0;ui.innerHTML=`<div class="scr"><div class="h">THE TALE WAITS</div><div class="t">Drag to move · Flick up or tap to jump<br>Bubbles fire on their own<br>Pop bubbles near each other for CHAINS<br>Chains open the hidden hoard</div><button class="b" data-a="resume">RESUME</button>${G.mode==='story'?'<button class="b m" data-a="retry">RESTART LEVEL</button>':''}<button class="b g" data-a="quit">QUIT TO MENU</button></div>`}
+ else{G.paused=true;clearTouch();ui.innerHTML=`<div class="scr"><div class="h">THE TALE WAITS</div><div class="t">${twoT()?'Left thumb: stick to move, push up to jump<br>Right thumb: hold to fire<br>':'Drag to move · Flick up or tap to jump<br>Bubbles fire on their own<br>'}Pop bubbles near each other for CHAINS<br>Chains open the hidden hoard</div><button class="b" data-a="resume">RESUME</button>${G.mode==='story'?'<button class="b m" data-a="retry">RESTART LEVEL</button>':''}<button class="b s" data-a="ctrl">${ctrlLabel()}</button><button class="b g" data-a="quit">QUIT TO MENU</button></div>`}
 }
 
 /* ============ RENDER: STATIC ============ */
@@ -707,7 +727,7 @@ function drawGame(){
   txt(ctx,G.label+(G.mod.n?' · '+G.mod.n:''),W/2,HUDH+215,12,'#fff','center');
   txt(ctx,G.isBoss?'A BEAST AWAITS':'THE TALE BEGINS',W/2,HUDH+240,10,'#27d9ff','center');
   if(G.showHint){ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(10,HUDH+290,W-20,92);
-   txt(ctx,'DRAG LEFT/RIGHT = MOVE',W/2,HUDH+305,11,'#fff','center');txt(ctx,'FLICK UP or TAP = JUMP',W/2,HUDH+323,11,'#fff','center');txt(ctx,'Bubbles fire automatically!',W/2,HUDH+345,11,'#27d9ff','center');txt(ctx,'Pop bubbles close together = CHAIN',W/2,HUDH+363,10,'#ff3df2','center')}
+   if(twoT()){txt(ctx,'LEFT THUMB = STICK (UP = JUMP)',W/2,HUDH+305,11,'#fff','center');txt(ctx,'RIGHT THUMB = HOLD TO FIRE',W/2,HUDH+323,11,'#fff','center');txt(ctx,'Fires the way you face!',W/2,HUDH+345,11,'#27d9ff','center')}else{txt(ctx,'DRAG LEFT/RIGHT = MOVE',W/2,HUDH+305,11,'#fff','center');txt(ctx,'FLICK UP or TAP = JUMP',W/2,HUDH+323,11,'#fff','center');txt(ctx,'Bubbles fire automatically!',W/2,HUDH+345,11,'#27d9ff','center');}txt(ctx,'Pop bubbles close together = CHAIN',W/2,HUDH+363,10,'#ff3df2','center')}
  }
  if(G.phase==='clear'){
   ctx.fillStyle='rgba(0,0,0,.35)';ctx.fillRect(0,HUDH+200,W,70);
@@ -715,6 +735,25 @@ function drawGame(){
   txt(ctx,'★'.repeat(G.stars)+'☆'.repeat(3-G.stars),W/2,HUDH+252,20,'#ffe94a','center');
  }
  if(G.phase==='dead'){ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(0,HUDH,W,PH)}
+ if(twoT()&&G.phase!=='over')drawPad();
+}
+function drawPad(){
+ ctx.save();
+ // joystick
+ const bx=joy?joy.bx:62,by=joy?joy.by:520;
+ ctx.globalAlpha=joy?.5:.28;ctx.lineWidth=2.5;ctx.strokeStyle='#27d9ff';ctx.fillStyle='rgba(39,217,255,.12)';
+ ctx.beginPath();ctx.arc(bx,by,46,0,7);ctx.fill();ctx.stroke();
+ const kx=joy?joy.bx+clamp(joy.x-joy.bx,-46,46):bx,ky=joy?joy.by+clamp(joy.y-joy.by,-46,46):by;
+ ctx.globalAlpha=joy?.85:.4;ctx.fillStyle='#27d9ff';ctx.beginPath();ctx.arc(kx,ky,18,0,7);ctx.fill();
+ // jump
+ ctx.globalAlpha=.4;ctx.strokeStyle='#ffe94a';ctx.fillStyle='rgba(255,233,74,.12)';
+ ctx.beginPath();ctx.arc(JUMPC.x,JUMPC.y,JUMPC.r,0,7);ctx.fill();ctx.stroke();
+ ctx.globalAlpha=.7;txt(ctx,'▲',JUMPC.x,JUMPC.y+1,16,'#ffe94a','center');
+ // fire
+ ctx.globalAlpha=touchFire?.8:.4;ctx.strokeStyle='#ff3df2';ctx.fillStyle=touchFire?'rgba(255,61,242,.4)':'rgba(255,61,242,.14)';
+ ctx.beginPath();ctx.arc(FIREC.x,FIREC.y,FIREC.r,0,7);ctx.fill();ctx.stroke();
+ ctx.globalAlpha=.85;txt(ctx,'FIRE',FIREC.x,FIREC.y+1,13,'#ff3df2','center');
+ ctx.restore();
 }
 
 let last=0,acc=0;
@@ -736,6 +775,7 @@ function resize(){
 }
 addEventListener('resize',resize);addEventListener('orientationchange',resize);
 
+function ctrlLabel(){return twoT()?'🎮 CONTROLS: TWO THUMBS<small>Stick + manual fire · tap to switch</small>':'🎮 CONTROLS: ONE THUMB<small>Drag + auto-fire · tap to switch</small>'}
 function showMenu(){
  if(G){G.active=false}G=null;P=null;pauseBtn.style.display='none';
  const d=save.daily,played=d.date===todayStr();
@@ -745,7 +785,8 @@ function showMenu(){
  <button class="b m" data-a="tower">♾ THE ENDLESS TOWER<small>Same tower for all · deepest floor ${save.bestTower}</small></button>
  <button class="b y" data-a="rogue">🎲 CURSED RUN<small>Take a boon every floor · deepest ${save.bestRogue}</small></button>
  <button class="b g" data-a="daily">📅 DAILY CURSE<small>${played?'Best today '+d.best.toLocaleString()+' · streak '+d.streak:'A new curse awaits!'}</small></button>
- <div class="row"><button class="b s" data-a="chars">🕯 THE CURSED · 🪙${save.coins}</button><button class="b s" data-a="mute" style="flex:0 0 auto">${save.mute?'🔇':'🔊'}</button></div></div>`;
+ <div class="row"><button class="b s" data-a="chars">🕯 THE CURSED · 🪙${save.coins}</button><button class="b s" data-a="mute" style="flex:0 0 auto">${save.mute?'🔇':'🔊'}</button></div>
+ <button class="b s" data-a="ctrl">${ctrlLabel()}</button></div>`;
 }
 let mapShown=0;
 function showMap(){
@@ -810,6 +851,7 @@ ui.addEventListener('click',e=>{
   case'chars':showChars();break;
   case'pick':save.sel=b.dataset.id;persist();showChars();break;
   case'buy':{const c=CH.find(x=>x.id===b.dataset.id);if(c&&save.coins>=c.cost&&!save.own.includes(c.id)){save.coins-=c.cost;save.own.push(c.id);save.sel=c.id;persist();snd(900,.3,'triangle',.06,600)}showChars();break}
+  case'ctrl':save.ctrl=twoT()?'one':'two';persist();if(G&&G.paused){togglePause();togglePause()}else showMenu();break;
   case'mute':save.mute=!save.mute;persist();showMenu();break;
   case'resume':togglePause();break;
   case'quit':if(G)G.active=false;if(G&&G.mode==='story'){G=null;showMap()}else showMenu();break;

@@ -61,8 +61,17 @@ Each level is built to last **roughly 30 to 60 seconds**, so it fits quick phone
 |---|---|
 | **Move** | Touch anywhere and **drag left or right**. A small dead-zone (12 px) prevents jitter. The drag "anchor" trails your thumb (34 px), so reversing direction is instant. |
 | **Jump** | **Flick your thumb up** (26 px upward) while dragging, **or quick-tap** (under about a quarter second with almost no movement). A **second finger tap** also jumps. |
-| **Shoot** | **Automatic.** The hero fires a bubble on its own at any fiend in range. |
+| **Shoot** | **Automatic** (one-thumb mode). The hero fires a bubble on its own at any fiend in range. |
 | **Pause** | Tap the **II** button (top left). The game also auto-pauses if you switch apps or tabs. |
+
+### Two-thumb mode (optional)
+Switch schemes with the **CONTROLS** button on the main menu or the pause screen. The choice is saved.
+| Action | How |
+|---|---|
+| **Move** | **Left thumb:** touch anywhere on the left half. A floating joystick appears under your thumb. Push left or right to run. |
+| **Jump** | Push the stick **up**, or tap the small yellow **▲** button (right side, lower). |
+| **Fire** | **Right thumb:** touch and **hold** anywhere on the right half (the magenta **FIRE** circle marks the spot). Bubbles fly the way you face, at the normal rate of about one per 0.4 s. |
+In this mode **auto-fire is off**: you aim by facing and choose when to shoot. The default one-thumb mode is unchanged.
 
 ### Keyboard (desktop)
 | Key | Action |
